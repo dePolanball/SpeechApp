@@ -51,10 +51,11 @@ if uploaded_file is not None:
     # Load the audio file using librosa
     y, sr = librosa.load(uploaded_file, sr=16000)
 
-    # Transcribe the audio using Huggingface model
+    # Transcribe the audio using Huggingface Whisper model
     with st.spinner("Transcribing..."):
-        inputs = torch.tensor(y).unsqueeze(0)
-        transcription = asr_model({"array": inputs[0].numpy()})['text']
+        # Pass the correct dictionary format to the ASR model
+        inputs = {"raw": y, "sampling_rate": sr}
+        transcription = asr_model(inputs)['text']
         st.subheader("Transcription:")
         st.write(transcription)
 
