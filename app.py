@@ -15,13 +15,14 @@ def process_audio(uploaded_file, asr_model):
     # Load audio file directly with librosa
     y, sr = librosa.load(uploaded_file, sr=16000)  # Ensuring the sampling rate is 16kHz
     
-    # Check if the audio duration exceeds 5 minutes (300 seconds)
-    if librosa.get_duration(y=y, sr=sr) > 300:
-        st.error("The audio file exceeds the 5-minute limit. Please upload a shorter file.")
-        return None
-
-    # Perform transcription
-    transcription = asr_model({"raw": y, "sampling_rate": sr})['text']
+    # Check the duration of the audio
+    duration = librosa.get_duration(y=y, sr=sr)
+    
+    # If duration is longer than 30 seconds, enable long-form transcription with timestamps
+    if duration > 30:
+        transcription = asr_model({"raw": y, "sampling_rate": sr}, return_timestamps=True)['text']
+    else:
+        transcription = asr_model({"raw": y, "sampling_rate": sr})['text']
     
     return transcription
 
