@@ -2,7 +2,7 @@
 import streamlit as st
 import torch
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor, pipeline
-import language_tool_python
+import requests
 import librosa
 import numpy as np
 
@@ -18,13 +18,23 @@ def load_phoneme_model():
 def load_asr_model():
     # Load Huggingface Whisper model for speech-to-text transcription
     asr_model = pipeline("automatic-speech-recognition", model="openai/whisper-base")
-    # Initialize LanguageTool for grammar checking
-    grammar_tool = language_tool_python.LanguageTool('en-US')
-    return asr_model, grammar_tool
+    return asr_model
+
+# Grammar check using LanguageTool API
+def grammar_check(text):
+    api_url = "https://api.languagetool.org/v2/check"
+    params = {
+        'text': text,
+        'language': 'en-US'
+    }
+    response = requests.post(api_url, data=params)
+    matches = response.json().get("matches", [])
+    
+    return matches
 
 # Load the models
 processor, phoneme_model = load_phoneme_model()
-asr_model, grammar_tool = load_asr_model()
+asr_model = load_asr_model()
 
 # Streamlit app interface
 st.title("Speech Transcription, Phoneme Analysis, and Grammar Evaluation")
@@ -63,12 +73,13 @@ if uploaded_file is not None:
         st.write(f"Pronunciation Score: {pronunciation_score:.2f} / 100")
         st.write("Recognized Phonemes: ", predicted_phonemes[0])
 
-    # Grammar evaluation using LanguageTool
+    # Grammar evaluation using LanguageTool API
     with st.spinner("Checking grammar..."):
-        grammar_issues = grammar_tool.check(transcription)
+        grammar_issues = grammar_check(transcription)
         grammar_score = max(0, 100 - len(grammar_issues) * 5)  # Deduct points per issue
         st.subheader("Grammar Evaluation:")
         st.write(f"Grammar Score: {grammar_score:.2f} / 100")
         st.write("Grammar Issues:")
         for issue in grammar_issues:
-            st.write(f"- {issue}")
+            st.write(f"- {issue['message']}")
+
