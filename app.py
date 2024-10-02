@@ -37,17 +37,40 @@ def grammar_check(text):
     
     return matches
 
+# Function to chunk audio into smaller parts
+def chunk_audio(y, sr, chunk_duration=30):
+    chunk_length = int(chunk_duration * sr)  # chunk_duration in seconds
+    chunks = [y[i:i + chunk_length] for i in range(0, len(y), chunk_length)]
+    return chunks
+
+# Transcribe chunks of audio with progress bar
+def transcribe_chunks(chunks, sr, model):
+    transcription = []
+    progress_bar = st.progress(0)
+    
+    for i, chunk in enumerate(chunks):
+        with st.spinner(f"Transcribing chunk {i+1}/{len(chunks)}..."):
+            inputs = {"raw": chunk, "sampling_rate": sr}
+            result = model(inputs)
+            transcription.append(result['text'])
+        
+        # Update the progress bar after each chunk
+        progress = (i + 1) / len(chunks)
+        progress_bar.progress(progress)
+    
+    return " ".join(transcription)
+
 # Load the models
 processor, phoneme_model = load_phoneme_model()
 asr_model = load_asr_model()
 
 # Streamlit app interface
-st.title("Optimized Speech Analysis v 0.0.1")
+st.title("Optimized Speech Transcription and Phoneme Analysis v 0.0.2")
 
-st.write("Upload an audio file (WAV, MP3, OGG, under 5 MB) for optimized analysis.")
+st.write("Upload an audio file (WAV, MP3, OGG, under 5 minutes) for optimized analysis.")
 
 # Restrict file uploader to audio files of a reasonable size
-uploaded_file = st.file_uploader("Choose an audio file (max 5 MB)", type=["wav", "mp3", "ogg"])
+uploaded_file = st.file_uploader("Choose an audio file (max 5 minutes)", type=["wav", "mp3", "ogg"])
 
 if uploaded_file is not None:
     # Play the uploaded audio file
@@ -56,27 +79,21 @@ if uploaded_file is not None:
     # Load the audio file with correct sampling rate (16 kHz) for compatibility with the models
     try:
         y, sr = librosa.load(uploaded_file, sr=16000)  # Ensure the sampling rate is 16 kHz
-    except Exception as e:
-        st.error(f"Error processing the audio file: {e}")
-        clear_cache()
+        duration_minutes = librosa.get_duration(y=y, sr=sr) / 60
+        if duration_minutes > 5:
+            st.error("The uploaded audio file is longer than 5 minutes. Please upload a shorter file.")
+            clear_cache()
+        else:
+            # Chunk the audio into 30-second segments
+            chunks = chunk_audio(y, sr, chunk_duration=30)
 
-    # Transcribe the audio using Huggingface Whisper model
-    transcription = None
-    with st.spinner("Transcribing..."):
-        try:
-            # Pass the correct dictionary format to the ASR model
-            inputs = {"raw": y, "sampling_rate": sr}
-            transcription = asr_model(inputs)['text']
+            # Transcribe each chunk and merge results, with progress bar
+            transcription = transcribe_chunks(chunks, sr, asr_model)
             st.subheader("Transcription:")
             st.write(transcription)
-        except Exception as e:
-            st.error(f"Error during transcription: {e}")
-            clear_cache()
 
-    # Phoneme analysis using Wav2Vec2 for pronunciation evaluation
-    if transcription:
-        with st.spinner("Analyzing pronunciation..."):
-            try:
+            # Phoneme analysis using Wav2Vec2 for pronunciation evaluation
+            with st.spinner("Analyzing pronunciation..."):
                 input_values = processor(y, return_tensors="pt", sampling_rate=sr).input_values
                 logits = phoneme_model(input_values).logits
                 predicted_ids = torch.argmax(logits, dim=-1)
@@ -89,13 +106,9 @@ if uploaded_file is not None:
                 st.subheader("Pronunciation Evaluation:")
                 st.write(f"Pronunciation Score: {pronunciation_score:.2f} / 100")
                 st.write("Recognized Phonemes: ", predicted_phonemes[0])
-            except Exception as e:
-                st.error(f"Error during phoneme analysis: {e}")
-                clear_cache()
 
-        # Grammar evaluation using LanguageTool API
-        with st.spinner("Checking grammar..."):
-            try:
+            # Grammar evaluation using LanguageTool API
+            with st.spinner("Checking grammar..."):
                 grammar_issues = grammar_check(transcription)
                 grammar_score = max(0, 100 - len(grammar_issues) * 5)  # Deduct points per issue
                 st.subheader("Grammar Evaluation:")
@@ -103,11 +116,10 @@ if uploaded_file is not None:
                 st.write("Grammar Issues:")
                 for issue in grammar_issues:
                     st.write(f"- {issue['message']}")
-            except Exception as e:
-                st.error(f"Error during grammar check: {e}")
-                clear_cache()
+    except Exception as e:
+        st.error(f"Error processing the audio file: {e}")
+        clear_cache()
 
 # Clear memory at the end of processing
 clear_cache()
-
 
