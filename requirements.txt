@@ -1,0 +1,7 @@
+
+streamlit
+transformers
+torch
+language-tool-python
+librosa
+numpy
