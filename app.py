@@ -19,6 +19,9 @@ grammar_model = load_grammar_model()
 def load_audio(file):
     try:
         waveform, sample_rate = torchaudio.load(file)
+        # Convert to mono if stereo
+        if waveform.size(0) > 1:
+            waveform = torch.mean(waveform, dim=0).unsqueeze(0)
         return waveform, sample_rate
     except Exception as e:
         st.error(f"Error loading audio: {e}")
