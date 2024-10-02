@@ -5,19 +5,14 @@ import torch
 import requests
 import json
 
-# Grammar checker using Gramformer (replace this with any lightweight grammar correction)
-# For lightweight grammar correction without Java, we're using pre-trained models
-# Install gramformer with: pip install gramformer
-from gramformer import Gramformer
-
 # Title of the app
 st.title("Optimized Speech-to-Text with Grammar Check and Pronunciation Analysis")
 
-# Initialize the grammar correction model
+# Load the grammar correction model using Hugging Face Transformers (e.g., T5 for correction)
 @st.cache_resource
 def load_grammar_model():
-    gf = Gramformer(models=1)  # Model=1 is for grammar correction
-    return gf
+    grammar_corrector = pipeline('text2text-generation', model="prithivida/grammar_error_correcter_v1")
+    return grammar_corrector
 
 grammar_model = load_grammar_model()
 
@@ -80,7 +75,7 @@ if uploaded_file:
         
         # Grammar correction
         st.info("Checking grammar...")
-        corrected_sentence = grammar_model.correct(transcription)
+        corrected_sentence = grammar_model(transcription)[0]['generated_text']
         st.write("Corrected Sentence:", corrected_sentence)
         
         # Pronunciation analysis
