@@ -15,13 +15,21 @@ def load_grammar_model():
 
 grammar_model = load_grammar_model()
 
-# Function to load audio using torchaudio (supports MP3 and WAV)
+# Function to load and process audio
 def load_audio(file):
     try:
         waveform, sample_rate = torchaudio.load(file)
-        # Convert to mono if stereo
+        
+        # Convert to mono (single channel) if stereo
         if waveform.size(0) > 1:
             waveform = torch.mean(waveform, dim=0).unsqueeze(0)
+        
+        # Resample to 16000 Hz if not already in that sample rate
+        if sample_rate != 16000:
+            resample_transform = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+            waveform = resample_transform(waveform)
+            sample_rate = 16000
+        
         return waveform, sample_rate
     except Exception as e:
         st.error(f"Error loading audio: {e}")
@@ -33,7 +41,7 @@ progress_bar = st.progress(0)
 # Load the ASR model (wav2vec2 without the need for ffmpeg)
 @st.cache_resource
 def load_asr_model():
-    asr_model = pipeline("automatic-speech-recognition", model="facebook/wav2vec2-base-960h")
+    asr_model = pipeline("automatic-speech-recognition", model="facebook/wav2vec2-base-960h", return_timestamps="word")
     return asr_model
 
 asr_model = load_asr_model()
@@ -50,22 +58,22 @@ uploaded_file = st.file_uploader("Choose an audio file (Max 2 minutes, MP3 or WA
 def process_audio(uploaded_file, model):
     try:
         if uploaded_file is not None:
-            # Read the raw waveform and sample rate from the uploaded file
+            # Load and process the audio
             waveform, sample_rate = load_audio(uploaded_file)
 
             if waveform is None:
                 return None
 
-            # Check file size
-            if waveform.size(1) > 16000 * 120:  # Limit to 2 minutes for a sample rate of 16k
+            # Check if audio exceeds 2 minutes (16000 * 120 samples for 16kHz)
+            if waveform.size(1) > 16000 * 120:
                 st.error("Audio file too long. Please upload a file shorter than 2 minutes.")
                 return None
 
             # Increment progress bar
             progress_bar.progress(50)
 
-            # Perform transcription
-            transcription = model(waveform.numpy(), return_timestamps='word')
+            # Perform transcription (ensure waveform is passed as numpy array)
+            transcription = model(waveform.numpy()[0], return_timestamps='word')
 
             # Complete progress bar
             progress_bar.progress(100)
