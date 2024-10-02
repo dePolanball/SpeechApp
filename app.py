@@ -1,9 +1,6 @@
 
 import streamlit as st
 from transformers import pipeline
-import torch
-import requests
-import json
 
 # Title of the app
 st.title("Optimized Speech-to-Text with Grammar Check and Pronunciation Analysis")
@@ -52,8 +49,8 @@ def process_audio(uploaded_file, model):
             # Increment progress bar
             progress_bar.progress(50)
 
-            # Perform transcription
-            transcription = model(audio_bytes, return_timestamps=False)
+            # Perform transcription with word-level timestamps
+            transcription = model(audio_bytes, return_timestamps='word')
 
             # Complete progress bar
             progress_bar.progress(100)
