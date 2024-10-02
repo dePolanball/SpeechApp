@@ -1,11 +1,13 @@
 
 import streamlit as st
+import torch
+import torchaudio
 from transformers import pipeline
 
 # Title of the app
 st.title("Optimized Speech-to-Text with Grammar Check and Pronunciation Analysis")
 
-# Load the grammar correction model using Hugging Face Transformers (e.g., T5 for correction)
+# Load the grammar correction model using Hugging Face Transformers
 @st.cache_resource
 def load_grammar_model():
     grammar_corrector = pipeline('text2text-generation', model="prithivida/grammar_error_correcter_v1")
@@ -13,13 +15,19 @@ def load_grammar_model():
 
 grammar_model = load_grammar_model()
 
-# Upload audio file
-uploaded_file = st.file_uploader("Choose an audio file (Max 2 minutes)", type=["wav", "mp3", "ogg"])
+# Function to load audio using torchaudio (supports MP3 and WAV)
+def load_audio(file):
+    try:
+        waveform, sample_rate = torchaudio.load(file)
+        return waveform, sample_rate
+    except Exception as e:
+        st.error(f"Error loading audio: {e}")
+        return None, None
 
 # Progress bar
 progress_bar = st.progress(0)
 
-# Load the ASR model (Assuming you've pre-downloaded or want a model compatible with available resources)
+# Load the ASR model (wav2vec2 without the need for ffmpeg)
 @st.cache_resource
 def load_asr_model():
     asr_model = pipeline("automatic-speech-recognition", model="facebook/wav2vec2-base-960h")
@@ -29,28 +37,32 @@ asr_model = load_asr_model()
 
 # Function to analyze pronunciation accuracy (dummy example for demonstration)
 def analyze_pronunciation(text):
-    # Placeholder function. Can be expanded with phoneme analysis if resources allow.
-    # Here we simply highlight words longer than 7 letters as potentially hard to pronounce.
     hard_words = [word for word in text.split() if len(word) > 7]
     return hard_words
+
+# Upload audio file (support for both WAV and MP3)
+uploaded_file = st.file_uploader("Choose an audio file (Max 2 minutes, MP3 or WAV format)", type=["wav", "mp3"])
 
 # Process and transcribe the uploaded audio file
 def process_audio(uploaded_file, model):
     try:
         if uploaded_file is not None:
-            # Read audio data
-            audio_bytes = uploaded_file.read()
+            # Read the raw waveform and sample rate from the uploaded file
+            waveform, sample_rate = load_audio(uploaded_file)
 
-            # Limit file size and length
-            if len(audio_bytes) > 2 * 60 * 1024 * 1024:  # Roughly equivalent to 2 minutes
+            if waveform is None:
+                return None
+
+            # Check file size
+            if waveform.size(1) > 16000 * 120:  # Limit to 2 minutes for a sample rate of 16k
                 st.error("Audio file too long. Please upload a file shorter than 2 minutes.")
                 return None
 
             # Increment progress bar
             progress_bar.progress(50)
 
-            # Perform transcription with word-level timestamps
-            transcription = model(audio_bytes, return_timestamps='word')
+            # Perform transcription
+            transcription = model(waveform.numpy(), return_timestamps='word')
 
             # Complete progress bar
             progress_bar.progress(100)
