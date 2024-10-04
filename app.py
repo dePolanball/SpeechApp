@@ -5,7 +5,7 @@ import torchaudio
 from transformers import pipeline
 
 # Title of the app
-st.title("Optimized Speech-to-Text with Grammar Check and Pronunciation Analysis")
+st.title("Speech Analyser v.0.0.1")
 
 # Load the grammar correction model using Hugging Face Transformers
 @st.cache_resource
